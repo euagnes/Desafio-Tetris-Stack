@@ -2,54 +2,54 @@
 #include <stdlib.h>
 #include <time.h>
 
-// --- Configurações e Constantes ---
-#define MAX_FILA 5   // Tamanho fixo da fila
-#define MAX_PILHA 3  // Tamanho fixo da reserva (pilha)
+// --- Configurações ---
+#define MAX_FILA 5
+#define MAX_PILHA 3
 
 typedef struct {
     char nome;  // 'I', 'O', 'T', 'L'
-    int id;     // Identificador único
+    int id;
 } Peca;
 
-// --- Variáveis Globais ---
-
-// Estrutura da Fila (Circular)
+// --- Globais ---
 Peca fila[MAX_FILA];
 int inicio = 0;
 int fim = 0;
 int total_fila = 0;
 
-// Estrutura da Pilha (Linear)
 Peca pilha[MAX_PILHA];
-int topo = 0; // Indica a próxima posição livre na pilha (0 = vazia)
+int topo = 0; // Aponta para o próximo espaço VAZIO
 
-int id_contador = 0; // Controle de IDs únicos
+int id_contador = 0;
 
 // --- Protótipos ---
 Peca gerarPeca();
 void inicializarJogo();
-void reabastecerFila(); // Auxiliar para manter a fila cheia
-void jogarPeca();       // Ação 1
-void reservarPeca();    // Ação 2
-void usarReserva();     // Ação 3
+void reabastecerFila();
+void jogarPeca();         // Ação 1
+void reservarPeca();      // Ação 2
+void usarReserva();       // Ação 3
+void trocarPecaUnica();   // Ação 4 (Novo)
+void trocaMultipla();     // Ação 5 (Novo - Desafio Master)
 void exibirEstado();
 void limparBuffer();
 
 int main() {
     srand(time(NULL));
-    
-    inicializarJogo(); // Já começa com a fila cheia
+    inicializarJogo();
 
     int opcao;
     do {
         exibirEstado();
 
-        printf("\n=== Opcoes de Acao ===\n");
-        printf("1 - Jogar peca (Da frente da fila)\n");
-        printf("2 - Reservar peca (Da fila para a pilha)\n");
-        printf("3 - Usar peca reservada (Do topo da pilha)\n");
+        printf("\n=== Opcoes disponiveis ===\n");
+        printf("1 - Jogar peca da frente da fila\n");
+        printf("2 - Enviar peca da fila para a pilha de reserva\n");
+        printf("3 - Usar peca da pilha de reserva\n");
+        printf("4 - Trocar peca da frente da fila com o topo da pilha\n");
+        printf("5 - Trocar os 3 primeiros da fila com as 3 pecas da pilha\n");
         printf("0 - Sair\n");
-        printf("Opcao: ");
+        printf("Opcao escolhida: ");
         
         scanf("%d", &opcao);
         limparBuffer();
@@ -57,20 +57,13 @@ int main() {
         printf("\n------------------------------------------------\n");
 
         switch (opcao) {
-            case 1:
-                jogarPeca();
-                break;
-            case 2:
-                reservarPeca();
-                break;
-            case 3:
-                usarReserva();
-                break;
-            case 0:
-                printf("Encerrando Tetris Stack...\n");
-                break;
-            default:
-                printf("[!] Opcao invalida.\n");
+            case 1: jogarPeca(); break;
+            case 2: reservarPeca(); break;
+            case 3: usarReserva(); break;
+            case 4: trocarPecaUnica(); break;
+            case 5: trocaMultipla(); break;
+            case 0: printf("Encerrando Tetris Stack...\n"); break;
+            default: printf("[!] Opcao invalida.\n");
         }
 
     } while (opcao != 0);
@@ -88,87 +81,117 @@ Peca gerarPeca() {
     return p;
 }
 
-// Enche a fila completamente no início
 void inicializarJogo() {
-    printf("Iniciando sistema... Gerando pecas iniciais.\n");
     for (int i = 0; i < MAX_FILA; i++) {
-        Peca nova = gerarPeca();
-        fila[fim] = nova;
-        fim = (fim + 1) % MAX_FILA; // Lógica circular
+        fila[fim] = gerarPeca();
+        fim = (fim + 1) % MAX_FILA;
         total_fila++;
     }
 }
 
-// Função auxiliar interna: Adiciona uma peça nova no final da fila automaticamente
 void reabastecerFila() {
-    if (total_fila < MAX_FILA) {
+    // Garante que a fila esteja cheia se houver espaço
+    while (total_fila < MAX_FILA) {
         Peca nova = gerarPeca();
         fila[fim] = nova;
         fim = (fim + 1) % MAX_FILA;
         total_fila++;
-        printf("   -> Nova peca [%c %d] entrou na fila (reposicao).\n", nova.nome, nova.id);
+        printf("   [Sistema] Reposicao automatica: Peca [%c %d] entrou na fila.\n", nova.nome, nova.id);
     }
 }
 
-// Ação 1: Joga a peça da frente e repõe
+// 1. Remove da frente
 void jogarPeca() {
-    // Como a fila é reabastecida sempre, ela teoricamente nunca está vazia,
-    // mas é boa prática verificar.
-    if (total_fila == 0) return; 
-
+    if (total_fila == 0) return;
     Peca p = fila[inicio];
     inicio = (inicio + 1) % MAX_FILA;
     total_fila--;
-
-    printf(">> Voce JOGOU a peca: [%c %d]\n", p.nome, p.id);
-    
-    // Regra do desafio: Manter a fila sempre cheia
+    printf(">> Acao: JOGOU a peca [%c %d]\n", p.nome, p.id);
     reabastecerFila();
 }
 
-// Ação 2: Move da frente da Fila para o topo da Pilha
+// 2. Move Fila -> Pilha
 void reservarPeca() {
     if (topo >= MAX_PILHA) {
-        printf("[!] A reserva (Pilha) esta CHEIA! Use uma peca reservada antes.\n");
+        printf("[!] Erro: A pilha de reserva esta CHEIA.\n");
         return;
     }
     
-    // 1. Pega a peça da fila (Dequeue)
     Peca p = fila[inicio];
     inicio = (inicio + 1) % MAX_FILA;
     total_fila--;
 
-    // 2. Coloca na pilha (Push)
     pilha[topo] = p;
-    topo++; // Incrementa o topo
-
-    printf(">> Peca [%c %d] movida para a RESERVA.\n", p.nome, p.id);
-
-    // 3. A fila precisa ser completada
+    topo++;
+    printf(">> Acao: RESERVOU a peca [%c %d]\n", p.nome, p.id);
     reabastecerFila();
 }
 
-// Ação 3: Usa a peça do topo da Pilha
+// 3. Remove da Pilha (Usa)
 void usarReserva() {
     if (topo == 0) {
-        printf("[!] A reserva (Pilha) esta VAZIA!\n");
+        printf("[!] Erro: A pilha de reserva esta VAZIA.\n");
+        return;
+    }
+    topo--;
+    Peca p = pilha[topo];
+    printf(">> Acao: USOU a peca da reserva [%c %d]\n", p.nome, p.id);
+    // Nota: Usar da reserva não afeta a fila, então não precisa reabastecer
+}
+
+// 4. Troca simples (Frente da Fila <-> Topo da Pilha)
+void trocarPecaUnica() {
+    if (total_fila == 0 || topo == 0) {
+        printf("[!] Erro: Precisa de pecas na fila E na pilha para trocar.\n");
         return;
     }
 
-    // Pop: Pega a peça do topo (topo - 1)
-    topo--; 
-    Peca p = pilha[topo];
+    // Identifica os índices
+    int idx_fila = inicio;
+    int idx_pilha = topo - 1; // O topo real é topo-1
 
-    printf(">> Voce USOU a peca da RESERVA: [%c %d]\n", p.nome, p.id);
-    
-    // Nota: Aqui NÃO chamamos reabastecerFila(), pois a peça saiu da pilha,
-    // e a fila não foi afetada.
+    // Realiza a troca (Swap)
+    Peca temp = fila[idx_fila];
+    fila[idx_fila] = pilha[idx_pilha];
+    pilha[idx_pilha] = temp;
+
+    printf(">> Acao: TROCA realizada ([%c %d] <-> [%c %d])\n", 
+           fila[idx_fila].nome, fila[idx_fila].id, 
+           pilha[idx_pilha].nome, pilha[idx_pilha].id);
+}
+
+// 5. Troca Múltipla (3 da Fila <-> 3 da Pilha)
+void trocaMultipla() {
+    // Validação: Pilha precisa estar cheia (3 itens) e Fila ter pelo menos 3
+    if (topo < 3 || total_fila < 3) {
+        printf("[!] Erro: Para troca multipla, a pilha deve ter 3 pecas.\n");
+        return;
+    }
+
+    printf(">> Acao: Realizando TROCA EM BLOCO (3 pecas)...\n");
+
+    // Loop para trocar 3 peças
+    for (int i = 0; i < 3; i++) {
+        // Cálculo do índice na FILA CIRCULAR:
+        // Precisamos do elemento 'inicio', 'inicio+1', 'inicio+2'
+        int idx_fila = (inicio + i) % MAX_FILA;
+
+        // Cálculo do índice na PILHA:
+        // Topo (topo-1), depois (topo-2), depois (topo-3)
+        int idx_pilha = (topo - 1) - i;
+
+        // Swap
+        Peca temp = fila[idx_fila];
+        fila[idx_fila] = pilha[idx_pilha];
+        pilha[idx_pilha] = temp;
+    }
+    printf(">> Sucesso! As 3 primeiras pecas foram trocadas.\n");
 }
 
 void exibirEstado() {
     printf("\nEstado atual:\n");
     
-    // 1. Exibir Fila
+    // Fila
     printf("Fila de pecas: ");
     int idx = inicio;
     for (int i = 0; i < total_fila; i++) {
@@ -177,13 +200,10 @@ void exibirEstado() {
     }
     printf("\n");
 
-    // 2. Exibir Pilha
-    // Mostramos do Topo (último adicionado) para a Base (índice 0)
+    // Pilha
     printf("Pilha de reserva (Topo -> Base): ");
-    if (topo == 0) {
-        printf("[ Vazia ]");
-    } else {
-        // O índice 'topo' aponta para o espaço vazio, então começamos de topo-1
+    if (topo == 0) printf("[ Vazia ]");
+    else {
         for (int i = topo - 1; i >= 0; i--) {
             printf("[%c %d] ", pilha[i].nome, pilha[i].id);
         }
